@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manage Text Expander Snippets</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sidebar {
+            border-right: 1px solid #eee;
+            padding-right: 20px;
+        }
+        .category-list {
+            margin-top: 20px;
+        }
+        .category-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .category-item:hover {
+            background: #f0f0f0;
+        }
+        .category-item.active {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .main-content {
+            padding-left: 20px;
+        }
+        .search-bar {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .snippet-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        .snippet-card {
+            border: 1px solid #eee;
+            padding: 15px;
+            border-radius: 6px;
+            background: white;
+        }
+        .snippet-card input {
+            width: 100%;
+            padding: 8px;
+            margin: 4px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background: #1976d2;
+            color: white;
+        }
+        .btn-secondary {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+        }
+        .category-select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            margin-top: 4px;
+            width: 100%;
+        }
+        .delete-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            float: right;
+        }
+        #importExport {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+            width: 500px;
+        }
+        #importExport textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+        }
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Categories</h2>
+            <button class="btn btn-primary" style="width: 100%" id="addCategory">Add Category</button>
+            <div class="category-list" id="categoryList">
+                <!-- Categories will be added here -->
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="toolbar">
+                <input type="text" class="search-bar" placeholder="Search snippets..." id="searchInput">
+                <div>
+                    <button class="btn btn-secondary" id="importExportBtn">Import/Export</button>
+                    <button class="btn btn-primary" id="addSnippet">Add Snippet</button>
+                </div>
+            </div>
+            <div class="snippet-grid" id="snippetGrid">
+                <!-- Snippets will be added here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop">
+        <div id="importExport">
+            <h3>Import/Export Snippets</h3>
+            <textarea id="importExportData" placeholder="Paste JSON data here to import, or copy current data to export"></textarea>
+            <div style="text-align: right">
+                <button class="btn btn-secondary" id="cancelImportExport">Cancel</button>
+                <button class="btn btn-primary" id="confirmImportExport">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="manage.js"></script>
+</body>
+</html> 

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Text Expander Settings</title>
+    <style>
+        body {
+            width: 350px;
+            padding: 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .header {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .manage-btn {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .snippet-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .snippet-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+        .snippet-content {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+        .trigger, .phrase {
+            width: 100%;
+            padding: 6px;
+            margin: 4px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .delete-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .add-new {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .status {
+            color: #4CAF50;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Quick Add</h2>
+        <button class="manage-btn" id="openManager">Manage All</button>
+    </div>
+    <div class="snippet-list" id="snippetList">
+        <!-- Snippets will be added here -->
+    </div>
+    <button class="add-new" id="addNew">Add New Snippet</button>
+    <div class="status" id="status"></div>
+    <script src="popup.js"></script>
+</body>
+</html> 
