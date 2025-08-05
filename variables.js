@@ -2,7 +2,14 @@
 const urlParams = new URLSearchParams(window.location.search);
 const text = urlParams.get('text');
 const elementId = urlParams.get('elementId');
-const variables = [...new Set(text.match(/\{\{([^}]+)\}\}/g)?.map(v => v.slice(2, -2)) || [])];
+
+// Extract variables from either {{var}} or (var) syntax
+const variableRegex = /\{\{([^}]+)\}\}|\(([^()]+)\)/g;
+let match;
+const variables = new Set();
+while ((match = variableRegex.exec(text)) !== null) {
+    variables.add(match[1] || match[2]);
+}
 
 // Create input fields for each variable
 const form = document.getElementById('variableForm');
@@ -33,11 +40,12 @@ document.getElementById('submitBtn').addEventListener('click', () => {
     document.querySelectorAll('input').forEach(input => {
         values[input.dataset.variable] = input.value || input.dataset.variable;
     });
-    
-    // Replace variables in text
+
+    // Replace variables in text supporting both syntaxes
     let finalText = text;
     Object.entries(values).forEach(([variable, value]) => {
-        const regex = new RegExp(`\\{\\{${variable}\\}\\}`, 'g');
+        const escaped = variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\{\\{${escaped}\\}\\}|\\(${escaped}\\)`, 'g');
         finalText = finalText.replace(regex, value);
     });
     
@@ -77,4 +85,4 @@ document.querySelectorAll('input').forEach(input => {
 // Handle cancel
 document.getElementById('cancelBtn').addEventListener('click', () => {
     window.close();
-}); 
+});
