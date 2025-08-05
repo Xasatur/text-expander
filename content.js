@@ -414,7 +414,8 @@ function replaceTrigger(el) {
 }
 
 function hasVariables(text) {
-    return text.includes('{{') && text.includes('}}');
+    // Support both legacy {{var}} syntax and new (var) syntax
+    return /(\{\{[^}]+\}\}|\([^()]+\))/.test(text);
 }
 
 // Initialize
