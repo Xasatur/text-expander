@@ -142,24 +142,8 @@ function setupServiceNowField(field) {
 
     console.log('Setting up ServiceNow field:', field.tagName, field.className, field);
 
-    const handleInput = (event) => {
-        const el = event.target;
-        const text = getElementValue(el);
-        console.log(`[Expander] Event '${event.type}' on`, el, 'Current value:', text);
-        
-        // Check for triggers
-        Object.keys(SNIPPETS).forEach(trigger => {
-            if (text.endsWith(trigger)) {
-                console.log('[Expander] Found trigger:', trigger, 'in', el);
-                replaceTextInElement(el, SNIPPETS[trigger]);
-            }
-        });
-    };
-
-    // Add input event listeners
-    ['input', 'keyup', 'paste'].forEach(eventType => {
-        field.addEventListener(eventType, handleInput, true);
-    });
+    // Use the unified listener setup which handles variables
+    setupListener(field);
 
     // Mark as initialized
     field.dataset.expanderInitialized = 'true';
@@ -414,7 +398,8 @@ function replaceTrigger(el) {
 }
 
 function hasVariables(text) {
-    return text.includes('{{') && text.includes('}}');
+    // Support both legacy {{var}} syntax and new (var) syntax
+    return /(\{\{[^}]+\}\}|\([^()]+\))/.test(text);
 }
 
 // Initialize
