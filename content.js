@@ -407,6 +407,7 @@ function replaceTrigger(el) {
 function hasVariables(text) {
     // Support both legacy {{var}} syntax and new **var** or *var* syntax
     return /(\{\{[^}()]+\}\}|\*\*[^*()]+\*\*|\*[^*()]+\*)/.test(text);
+
 }
 
 // Initialize
