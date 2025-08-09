@@ -3,8 +3,8 @@ const urlParams = new URLSearchParams(window.location.search);
 const text = urlParams.get('text');
 const elementId = urlParams.get('elementId');
 
-// Extract variables from either {{var}} or (var) syntax
-const variableRegex = /\{\{([^}]+)\}\}|\(([^()]+)\)/g;
+// Extract variables from either {{var}} or **var** syntax
+const variableRegex = /\{\{([^}]+)\}\}|\*\*([^*]+)\*\*/g;
 let match;
 const variables = new Set();
 while ((match = variableRegex.exec(text)) !== null) {
@@ -45,7 +45,7 @@ document.getElementById('submitBtn').addEventListener('click', () => {
     let finalText = text;
     Object.entries(values).forEach(([variable, value]) => {
         const escaped = variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`\\{\\{${escaped}\\}\\}|\\(${escaped}\\)`, 'g');
+        const regex = new RegExp(`\\{\\{${escaped}\\}\\}|\\*\\*${escaped}\\*\\*`, 'g');
         finalText = finalText.replace(regex, value);
     });
     
