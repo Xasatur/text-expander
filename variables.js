@@ -3,12 +3,12 @@ const urlParams = new URLSearchParams(window.location.search);
 const text = urlParams.get('text');
 const elementId = urlParams.get('elementId');
 
-// Extract variables from either {{var}} or **var** syntax
-const variableRegex = /\{\{([^}]+)\}\}|\*\*([^*]+)\*\*/g;
+// Extract variables from {{var}}, **var**, or *var* syntax, ignoring parentheses
+const variableRegex = /\{\{([^}()]+)\}\}|\*\*([^*()]+)\*\*|\*([^*()]+)\*/g;
 let match;
 const variables = new Set();
 while ((match = variableRegex.exec(text)) !== null) {
-    variables.add(match[1] || match[2]);
+    variables.add(match[1] || match[2] || match[3]);
 }
 
 // Create input fields for each variable
@@ -41,11 +41,11 @@ document.getElementById('submitBtn').addEventListener('click', () => {
         values[input.dataset.variable] = input.value || input.dataset.variable;
     });
 
-    // Replace variables in text supporting both syntaxes
+    // Replace variables in text supporting all syntaxes
     let finalText = text;
     Object.entries(values).forEach(([variable, value]) => {
         const escaped = variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`\\{\\{${escaped}\\}\\}|\\*\\*${escaped}\\*\\*`, 'g');
+        const regex = new RegExp(`\\{\\{${escaped}\\}\\}|\\*\\*${escaped}\\*\\*|\\*${escaped}\\*`, 'g');
         finalText = finalText.replace(regex, value);
     });
     
