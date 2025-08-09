@@ -27,6 +27,15 @@ const SERVICE_NOW_SELECTORS = [
 // TinyMCE editor cache
 let tinyMCEEditors = new WeakMap();
 
+// Simple debounce utility to limit rapid event firing
+function debounce(fn, wait = 100) {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn.apply(null, args), wait);
+    };
+}
+
 // Load snippets from storage
 function loadSnippets() {
     try {
@@ -263,15 +272,15 @@ function isEditableElement(element) {
 function setupListener(input) {
     if (!input || input.dataset.listenerAttached) return;
 
-    const handler = (event) => {
+    const handler = debounce(() => {
         console.log('Input event on:', input.tagName, input.className);
         replaceTrigger(input);
-    };
+    });
 
     // For TinyMCE editors
     const tinyEditor = getTinyMCEEditor(input);
     if (tinyEditor) {
-        tinyEditor.on('input keyup paste', handler);
+        tinyEditor.on('input', handler);
         input.dataset.listenerAttached = 'true';
         return;
     }
@@ -285,9 +294,7 @@ function setupListener(input) {
 
     elements.forEach(el => {
         try {
-            ['input', 'keyup', 'paste'].forEach(eventType => {
-                el.addEventListener(eventType, handler);
-            });
+            el.addEventListener('input', handler);
         } catch (e) {
             console.log('Error attaching listener:', e);
         }
