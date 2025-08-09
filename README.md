@@ -25,8 +25,9 @@ standard text inputs and ServiceNow's special fields.
 
 ## Variable Placeholders
 
-Snippets can include dynamic values. Use either `{{name}}` or `(name)` in a
-snippet to mark a variable. When the snippet is triggered, a popup will prompt
-for the value of each variable before inserting the text.
+Snippets can include dynamic values. Use `**name**` in a snippet to mark a
+variable. The extension also supports the legacy `{{name}}` syntax. When the
+snippet is triggered, a popup will prompt for the value of each variable before
+inserting the text.
 
 
