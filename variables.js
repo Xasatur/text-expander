@@ -3,8 +3,9 @@ const urlParams = new URLSearchParams(window.location.search);
 const text = urlParams.get('text');
 const elementId = urlParams.get('elementId');
 
-// Extract variables from {{var}}, **var**, or *var* syntax
-const variableRegex = /\{\{([^}]+)\}\}|\*\*([^*]+)\*\*|\*([^*]+)\*/g;
+
+// Extract variables from {{var}}, **var**, or *var* syntax, ignoring parentheses
+const variableRegex = /\{\{([^}()]+)\}\}|\*\*([^*()]+)\*\*|\*([^*()]+)\*/g;
 let match;
 const variables = new Set();
 while ((match = variableRegex.exec(text)) !== null) {
