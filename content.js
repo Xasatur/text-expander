@@ -526,20 +526,34 @@ function replaceTrigger(el) {
                 defaultAudience: snippetData.defaultAudience || 'internal'
             };
 
-            chrome.runtime.sendMessage({
+            safeSendMessage({
                 action: 'openAudiencePopup',
                 elementId: elementId,
                 variants: snippetData.variants,
                 defaultAudience: snippetData.defaultAudience || 'internal'
-            }, response => {
-                if (chrome.runtime.lastError || !response || response.success !== true) {
-                    console.log('Audience popup failed, falling back to default audience:', chrome.runtime.lastError || response);
-                    const fallbackVariant = snippetData.defaultAudience === 'external' ? snippetData.variants.external : snippetData.variants.internal;
-                    finalizeAudienceSelection(elementId, fallbackVariant || snippetData.variants.internal || snippetData.variants.external || '');
-                }
+            }, () => {
+                // audience popup opened successfully
+            }, (error) => {
+                console.log('Audience popup failed, falling back to default audience:', error);
+                const fallbackVariant = snippetData.defaultAudience === 'external' ? snippetData.variants.external : snippetData.variants.internal;
+                finalizeAudienceSelection(elementId, fallbackVariant || snippetData.variants.internal || snippetData.variants.external || '');
             });
             return;
         }
+    }
+}
+
+function safeSendMessage(payload, onSuccess, onError) {
+    try {
+        chrome.runtime.sendMessage(payload, response => {
+            if (chrome.runtime.lastError || !response || response.success !== true) {
+                onError?.(chrome.runtime.lastError || response);
+            } else {
+                onSuccess?.(response);
+            }
+        });
+    } catch (err) {
+        onError?.(err);
     }
 }
 
@@ -559,10 +573,15 @@ function finalizeAudienceSelection(elementId, text) {
     }
 
     if (hasVariables(text)) {
-        chrome.runtime.sendMessage({
+        safeSendMessage({
             action: 'openVariablesPopup',
             text: text,
             elementId: elementId
+        }, () => {}, (error) => {
+            console.log('Variables popup failed:', error);
+            // As last resort insert raw text without variable replacement
+            replaceTextInElement(element, text);
+            element.removeAttribute('data-expander-id');
         });
     } else {
         replaceTextInElement(element, text);
