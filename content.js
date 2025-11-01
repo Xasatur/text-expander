@@ -97,29 +97,28 @@ function rebuildSnippetMap() {
     console.log('Active snippets with per-snippet defaults:', Object.keys(SNIPPETS).length);
 }
 
+function hasAnySnippets(data) {
+    return data && typeof data === 'object' && Object.keys(data).length > 0;
+}
+
 // Load snippets from storage
 function loadSnippets() {
     try {
-        chrome.storage.local.get(['storageMode'], modeData => {
-            const preferred = modeData.storageMode === 'local' ? 'local' : 'sync';
-            const primary = preferred === 'local' ? chrome.storage.local : chrome.storage.sync;
+        chrome.storage.local.get(['storageMode', 'snippets'], localData => {
+            const shouldUseLocal = localData.storageMode === 'local' || hasAnySnippets(localData.snippets);
+            if (shouldUseLocal) {
+                currentStorageMode = 'local';
+                hydrateSnippets(localData.snippets || {});
+                return;
+            }
 
-            primary.get(['snippets'], result => {
-                if (chrome.runtime.lastError || !result || !result.snippets) {
-                    if (preferred === 'sync') {
-                        chrome.storage.local.get(['snippets'], localResult => {
-                            if (localResult && localResult.snippets) {
-                                currentStorageMode = 'local';
-                                hydrateSnippets(localResult.snippets);
-                            } else {
-                                currentStorageMode = preferred;
-                                hydrateSnippets({});
-                            }
-                        });
-                        return;
-                    }
+            chrome.storage.sync.get(['snippets'], result => {
+                if (chrome.runtime.lastError) {
+                    console.error('Storage error:', chrome.runtime.lastError);
+                    hydrateSnippets({});
+                    return;
                 }
-                currentStorageMode = preferred;
+                currentStorageMode = 'sync';
                 hydrateSnippets(result?.snippets || {});
             });
         });
@@ -139,6 +138,11 @@ function hydrateSnippets(data) {
 // Listen for changes in storage
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace !== 'sync' && namespace !== 'local') return;
+
+    if (namespace === 'local' && (changes.storageMode || !changes.snippets)) {
+        loadSnippets();
+        return;
+    }
 
     if (changes.storageMode && namespace === 'local') {
         loadSnippets();
