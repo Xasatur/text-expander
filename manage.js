@@ -1,6 +1,86 @@
 let snippets = {};
 let categories = ['Default'];
 let currentCategory = 'Default';
+let currentStorageMode = 'sync';
+let localFallbackNotified = false;
+
+function getPreferredStorage(callback) {
+    chrome.storage.local.get(['storageMode'], data => {
+        const mode = data.storageMode === 'local' ? 'local' : 'sync';
+        callback(mode);
+    });
+}
+
+function isEmptyResult(result, keys) {
+    return !keys.some(key => Object.prototype.hasOwnProperty.call(result, key) && result[key] !== undefined);
+}
+
+function isQuotaError(error) {
+    return error && error.message && error.message.toLowerCase().includes('quota');
+}
+
+function loadFromStorage(keys, callback) {
+    getPreferredStorage(mode => {
+        const primary = mode === 'local' ? chrome.storage.local : chrome.storage.sync;
+        primary.get(keys, result => {
+            if (chrome.runtime.lastError || isEmptyResult(result, keys)) {
+                if (mode === 'sync') {
+                    chrome.storage.local.get(keys, localResult => {
+                        if (!isEmptyResult(localResult, keys)) {
+                            currentStorageMode = 'local';
+                            callback('local', localResult);
+                        } else {
+                            currentStorageMode = mode;
+                            callback(mode, result);
+                        }
+                    });
+                    return;
+                }
+            }
+            currentStorageMode = mode;
+            callback(mode, result);
+        });
+    });
+}
+
+function saveToStorage(data, onSuccess, onError) {
+    if (currentStorageMode === 'local') {
+        chrome.storage.local.set({ ...data, storageMode: 'local' }, () => {
+            if (chrome.runtime.lastError) {
+                onError?.(chrome.runtime.lastError);
+            } else {
+                onSuccess?.('local');
+            }
+        });
+        return;
+    }
+
+    chrome.storage.sync.set(data, () => {
+        if (chrome.runtime.lastError) {
+            if (isQuotaError(chrome.runtime.lastError)) {
+                chrome.storage.local.set({ ...data, storageMode: 'local' }, () => {
+                    if (chrome.runtime.lastError) {
+                        onError?.(chrome.runtime.lastError);
+                        return;
+                    }
+                    currentStorageMode = 'local';
+                    if (!localFallbackNotified) {
+                        alert('Synchronisierung hat das Limit erreicht. Snippets werden jetzt lokal gespeichert.');
+                        localFallbackNotified = true;
+                    }
+                    onSuccess?.('local');
+                });
+            } else {
+                onError?.(chrome.runtime.lastError);
+            }
+        } else {
+            chrome.storage.local.remove(['storageMode', 'snippets', 'categories']);
+            currentStorageMode = 'sync';
+            localFallbackNotified = false;
+            onSuccess?.('sync');
+        }
+    });
+}
 
 function normalizeSnippetData(data) {
     if (typeof data === 'string') {
@@ -51,12 +131,15 @@ function normalizeSnippetData(data) {
 document.addEventListener('DOMContentLoaded', loadData);
 
 function loadData() {
-    chrome.storage.sync.get(['snippets', 'categories'], function(result) {
-        const rawSnippets = result.snippets || {};
+    loadFromStorage(['snippets', 'categories'], (mode, result) => {
+        const rawSnippets = result?.snippets || {};
         snippets = Object.fromEntries(Object.entries(rawSnippets).map(([trigger, data]) => {
             return [trigger, normalizeSnippetData(data)];
         }));
-        categories = result.categories || ['Default'];
+        categories = result?.categories || ['Default'];
+        if (!categories.length) {
+            categories = ['Default'];
+        }
         currentCategory = categories[0];
         
         renderCategories();
@@ -222,11 +305,15 @@ function deleteCategory(category) {
 }
 
 function saveData() {
-    chrome.storage.sync.set({ 
+    const payload = {
         snippets: snippets,
         categories: categories
-    }, function() {
-        console.log('Data saved');
+    };
+    saveToStorage(payload, mode => {
+        console.log('Data saved to', mode, 'storage');
+    }, error => {
+        console.error('Error saving data:', error);
+        alert('Konnte Snippets nicht speichern: ' + (error?.message || error));
     });
 }
 

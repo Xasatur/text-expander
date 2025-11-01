@@ -2,6 +2,7 @@
 let SNIPPETS = {};
 let RAW_SNIPPETS = {};
 const PENDING_AUDIENCE = {};
+let currentStorageMode = 'sync';
 
 // ServiceNow field selectors
 const SERVICE_NOW_SELECTORS = [
@@ -99,27 +100,53 @@ function rebuildSnippetMap() {
 // Load snippets from storage
 function loadSnippets() {
     try {
-        chrome.storage.sync.get(['snippets'], function(result) {
-            if (chrome.runtime.lastError) {
-                console.error('Storage error:', chrome.runtime.lastError);
-                return;
-            }
-            RAW_SNIPPETS = Object.entries(result.snippets || {}).reduce((acc, [trigger, data]) => {
-                acc[trigger] = normalizeSnippetData(data);
-                return acc;
-            }, {});
-            rebuildSnippetMap();
+        chrome.storage.local.get(['storageMode'], modeData => {
+            const preferred = modeData.storageMode === 'local' ? 'local' : 'sync';
+            const primary = preferred === 'local' ? chrome.storage.local : chrome.storage.sync;
+
+            primary.get(['snippets'], result => {
+                if (chrome.runtime.lastError || !result || !result.snippets) {
+                    if (preferred === 'sync') {
+                        chrome.storage.local.get(['snippets'], localResult => {
+                            if (localResult && localResult.snippets) {
+                                currentStorageMode = 'local';
+                                hydrateSnippets(localResult.snippets);
+                            } else {
+                                currentStorageMode = preferred;
+                                hydrateSnippets({});
+                            }
+                        });
+                        return;
+                    }
+                }
+                currentStorageMode = preferred;
+                hydrateSnippets(result?.snippets || {});
+            });
         });
     } catch (e) {
         console.error('Error loading snippets:', e);
     }
 }
 
+function hydrateSnippets(data) {
+    RAW_SNIPPETS = Object.entries(data || {}).reduce((acc, [trigger, value]) => {
+        acc[trigger] = normalizeSnippetData(value);
+        return acc;
+    }, {});
+    rebuildSnippetMap();
+}
+
 // Listen for changes in storage
 chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace !== 'sync') return;
+    if (namespace !== 'sync' && namespace !== 'local') return;
+
+    if (changes.storageMode && namespace === 'local') {
+        loadSnippets();
+        return;
+    }
 
     if (changes.snippets) {
+        currentStorageMode = namespace;
         RAW_SNIPPETS = Object.entries(changes.snippets.newValue || {}).reduce((acc, [trigger, data]) => {
             acc[trigger] = normalizeSnippetData(data);
             return acc;

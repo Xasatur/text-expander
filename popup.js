@@ -1,5 +1,101 @@
+let currentStorageMode = 'sync';
+let localFallbackNotified = false;
+
 // Load existing snippets when popup opens
 document.addEventListener('DOMContentLoaded', loadSnippets);
+
+function getPreferredStorage(callback) {
+    chrome.storage.local.get(['storageMode'], data => {
+        const mode = data.storageMode === 'local' ? 'local' : 'sync';
+        callback(mode);
+    });
+}
+
+function isEmptyResult(result, keys) {
+    return !keys.some(key => Object.prototype.hasOwnProperty.call(result, key) && result[key] !== undefined && result[key] !== null);
+}
+
+function isQuotaError(error) {
+    return error && error.message && error.message.toLowerCase().includes('quota');
+}
+
+function loadFromStorage(keys, callback) {
+    getPreferredStorage(mode => {
+        const primary = mode === 'local' ? chrome.storage.local : chrome.storage.sync;
+        primary.get(keys, result => {
+            if (chrome.runtime.lastError || isEmptyResult(result, keys)) {
+                if (mode === 'sync') {
+                    chrome.storage.local.get(keys, localResult => {
+                        if (!isEmptyResult(localResult, keys)) {
+                            currentStorageMode = 'local';
+                            callback('local', localResult);
+                        } else {
+                            currentStorageMode = mode;
+                            callback(mode, result);
+                        }
+                    });
+                    return;
+                }
+            }
+            currentStorageMode = mode;
+            callback(mode, result);
+        });
+    });
+}
+
+function saveToStorage(data, onSuccess, onError) {
+    if (currentStorageMode === 'local') {
+        chrome.storage.local.set({ ...data, storageMode: 'local' }, () => {
+            if (chrome.runtime.lastError) {
+                onError?.(chrome.runtime.lastError);
+            } else {
+                const status = document.getElementById('status');
+                if (status) {
+                    status.textContent = 'Snippets lokal gespeichert.';
+                    setTimeout(() => status.textContent = '', 3000);
+                }
+                onSuccess?.('local');
+            }
+        });
+        return;
+    }
+
+    chrome.storage.sync.set(data, () => {
+        const status = document.getElementById('status');
+        if (chrome.runtime.lastError) {
+            if (isQuotaError(chrome.runtime.lastError)) {
+                chrome.storage.local.set({ ...data, storageMode: 'local' }, () => {
+                    if (chrome.runtime.lastError) {
+                        onError?.(chrome.runtime.lastError);
+                        return;
+                    }
+                    currentStorageMode = 'local';
+                    if (!localFallbackNotified && status) {
+                        status.textContent = 'Sync-Limit erreicht. Snippets lokal gespeichert.';
+                        setTimeout(() => status.textContent = '', 4000);
+                    }
+                    localFallbackNotified = true;
+                    onSuccess?.('local');
+                });
+            } else {
+                if (status) {
+                    status.textContent = 'Speichern fehlgeschlagen.';
+                    setTimeout(() => status.textContent = '', 3000);
+                }
+                onError?.(chrome.runtime.lastError);
+            }
+        } else {
+            chrome.storage.local.remove(['storageMode', 'snippets', 'categories', 'settings']);
+            currentStorageMode = 'sync';
+            localFallbackNotified = false;
+            if (status) {
+                status.textContent = 'Snippets gespeichert!';
+                setTimeout(() => status.textContent = '', 2000);
+            }
+            onSuccess?.('sync');
+        }
+    });
+}
 
 function normalizeSnippetData(data) {
     if (typeof data === 'string') {
@@ -47,8 +143,8 @@ function normalizeSnippetData(data) {
 }
 
 function loadSnippets() {
-    chrome.storage.sync.get(['snippets'], function(result) {
-        const snippets = result.snippets || {};
+    loadFromStorage(['snippets'], (mode, result) => {
+        const snippets = result?.snippets || {};
         const container = document.getElementById('snippetList');
         container.innerHTML = '';
         
@@ -160,10 +256,8 @@ function saveSnippets() {
         }
     });
     
-    chrome.storage.sync.set({ snippets }, function() {
-        const status = document.getElementById('status');
-        status.textContent = 'Snippets saved!';
-        setTimeout(() => status.textContent = '', 2000);
+    saveToStorage({ snippets }, () => {}, error => {
+        console.error('Error saving snippets:', error);
     });
 }
 
