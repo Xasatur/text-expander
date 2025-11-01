@@ -1,5 +1,7 @@
 // Initialize snippets from storage
 let SNIPPETS = {};
+let RAW_SNIPPETS = {};
+const PENDING_AUDIENCE = {};
 
 // ServiceNow field selectors
 const SERVICE_NOW_SELECTORS = [
@@ -36,6 +38,64 @@ function debounce(fn, wait = 100) {
     };
 }
 
+function normalizeSnippetData(data) {
+    if (typeof data === 'string') {
+        return {
+            variants: {
+                internal: data,
+                external: data
+            },
+            category: 'Default',
+            defaultAudience: 'internal'
+        };
+    }
+
+    if (!data) {
+        return {
+            variants: {
+                internal: '',
+                external: ''
+            },
+            category: 'Default',
+            defaultAudience: 'internal'
+        };
+    }
+
+    if (data.variants) {
+        return {
+            variants: {
+                internal: data.variants.internal || data.variants.external || '',
+                external: data.variants.external || data.variants.internal || ''
+            },
+            category: data.category || 'Default',
+            defaultAudience: data.defaultAudience || 'internal'
+        };
+    }
+
+    const phrase = data.phrase || '';
+    return {
+        variants: {
+            internal: phrase,
+            external: phrase
+        },
+        category: data.category || 'Default',
+        defaultAudience: data.defaultAudience || 'internal'
+    };
+}
+
+function rebuildSnippetMap() {
+    SNIPPETS = Object.entries(RAW_SNIPPETS).reduce((acc, [trigger, data]) => {
+        const variants = data.variants || {};
+        const preferred = data.defaultAudience === 'external' ? 'external' : 'internal';
+        const chosen = variants[preferred] || variants.internal || variants.external || '';
+        if (chosen) {
+            acc[trigger] = chosen;
+        }
+        return acc;
+    }, {});
+    console.log('Active snippets with per-snippet defaults:', Object.keys(SNIPPETS).length);
+}
+
 // Load snippets from storage
 function loadSnippets() {
     try {
@@ -44,11 +104,11 @@ function loadSnippets() {
                 console.error('Storage error:', chrome.runtime.lastError);
                 return;
             }
-            SNIPPETS = Object.entries(result.snippets || {}).reduce((acc, [trigger, data]) => {
-                acc[trigger] = typeof data === 'string' ? data : data.phrase;
+            RAW_SNIPPETS = Object.entries(result.snippets || {}).reduce((acc, [trigger, data]) => {
+                acc[trigger] = normalizeSnippetData(data);
                 return acc;
             }, {});
-            console.log('Snippets loaded:', Object.keys(SNIPPETS).length);
+            rebuildSnippetMap();
         });
     } catch (e) {
         console.error('Error loading snippets:', e);
@@ -57,12 +117,14 @@ function loadSnippets() {
 
 // Listen for changes in storage
 chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'sync' && changes.snippets) {
-        SNIPPETS = Object.entries(changes.snippets.newValue || {}).reduce((acc, [trigger, data]) => {
-            acc[trigger] = typeof data === 'string' ? data : data.phrase;
+    if (namespace !== 'sync') return;
+
+    if (changes.snippets) {
+        RAW_SNIPPETS = Object.entries(changes.snippets.newValue || {}).reduce((acc, [trigger, data]) => {
+            acc[trigger] = normalizeSnippetData(data);
             return acc;
         }, {});
-        console.log('Updated snippets:', Object.keys(SNIPPETS).length);
+        rebuildSnippetMap();
     }
 });
 
@@ -74,10 +136,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             replaceTextInElement(element, message.text);
             // Remove the expander id after use
             element.removeAttribute('data-expander-id');
+            element.removeAttribute('data-expander-audience-pending');
             sendResponse({ success: true });
         } else {
             sendResponse({ success: false, error: 'Element not found' });
         }
+        return true;
+    }
+
+    if (message.action === 'audienceSelected') {
+        const pending = PENDING_AUDIENCE[message.elementId];
+        if (!pending) {
+            sendResponse?.({ success: false, error: 'Pending audience selection not found' });
+            return true;
+        }
+
+        const selectedText = message.text || '';
+        if (!selectedText) {
+            sendResponse?.({ success: false, error: 'No text for selected variant' });
+            return true;
+        }
+
+        finalizeAudienceSelection(message.elementId, selectedText);
+        sendResponse?.({ success: true });
+        return true;
+    }
+
+    if (message.action === 'audienceCancelled') {
+        const element = document.querySelector(`[data-expander-id="${message.elementId}"]`);
+        if (element) {
+            element.removeAttribute('data-expander-audience-pending');
+            element.removeAttribute('data-expander-id');
+        }
+        delete PENDING_AUDIENCE[message.elementId];
+        sendResponse?.({ success: true });
         return true;
     }
 });
@@ -382,26 +474,71 @@ function replaceTrigger(el) {
     for (let trigger of Object.keys(SNIPPETS)) {
         if (beforeCursor.endsWith(trigger)) {
             console.log('Found trigger:', trigger);
-            const replacement = SNIPPETS[trigger];
+            const snippetData = RAW_SNIPPETS[trigger];
+            if (!snippetData) {
+                console.log('No snippet data found for trigger:', trigger);
+                continue;
+            }
 
-            if (hasVariables(replacement)) {
-                console.log('[Expander] Detected variables, opening popup for:', replacement);
-                // Set a unique data-expander-id on the element
-                const elementId = 'expander_' + Math.random().toString(36).substr(2, 9);
-                el.dataset.expanderId = elementId;
-
-                chrome.runtime.sendMessage({
-                    action: 'openVariablesPopup',
-                    text: replacement,
-                    elementId: elementId
-                });
+            if (el.dataset.expanderAudiencePending === 'true') {
+                console.log('Audience selection already pending for element');
                 return;
             }
 
-            replaceTextInElement(el, replacement);
-            break;
+            const elementId = 'expander_' + Math.random().toString(36).substr(2, 9);
+            el.dataset.expanderId = elementId;
+            el.dataset.expanderAudiencePending = 'true';
+
+            PENDING_AUDIENCE[elementId] = {
+                trigger: trigger,
+                variants: snippetData.variants,
+                defaultAudience: snippetData.defaultAudience || 'internal'
+            };
+
+            chrome.runtime.sendMessage({
+                action: 'openAudiencePopup',
+                elementId: elementId,
+                variants: snippetData.variants,
+                defaultAudience: snippetData.defaultAudience || 'internal'
+            }, response => {
+                if (chrome.runtime.lastError || !response || response.success !== true) {
+                    console.log('Audience popup failed, falling back to default audience:', chrome.runtime.lastError || response);
+                    const fallbackVariant = snippetData.defaultAudience === 'external' ? snippetData.variants.external : snippetData.variants.internal;
+                    finalizeAudienceSelection(elementId, fallbackVariant || snippetData.variants.internal || snippetData.variants.external || '');
+                }
+            });
+            return;
         }
     }
+}
+
+function finalizeAudienceSelection(elementId, text) {
+    const element = document.querySelector(`[data-expander-id="${elementId}"]`);
+    if (!element) {
+        delete PENDING_AUDIENCE[elementId];
+        return;
+    }
+
+    element.removeAttribute('data-expander-audience-pending');
+
+    if (!text) {
+        element.removeAttribute('data-expander-id');
+        delete PENDING_AUDIENCE[elementId];
+        return;
+    }
+
+    if (hasVariables(text)) {
+        chrome.runtime.sendMessage({
+            action: 'openVariablesPopup',
+            text: text,
+            elementId: elementId
+        });
+    } else {
+        replaceTextInElement(element, text);
+        element.removeAttribute('data-expander-id');
+    }
+
+    delete PENDING_AUDIENCE[elementId];
 }
 
 function hasVariables(text) {

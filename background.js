@@ -1,5 +1,7 @@
 // Keep track of the tab that opened the variables popup
 let sourceTabId = null;
+// Track audience selection popups
+const audienceContexts = new Map();
 
 // Remove existing context menus and create new ones
 chrome.contextMenus.removeAll(() => {
@@ -26,13 +28,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'openVariablesPopup') {
         // Store the source tab ID
         sourceTabId = sender.tab.id;
-        
+
         // Create URL with parameters
         const url = 'variables.html?' + new URLSearchParams({
             text: message.text,
             elementId: message.elementId
         }).toString();
-        
+
         // Open popup window
         chrome.windows.create({
             url: url,
@@ -40,11 +42,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             width: 400,
             height: 300
         });
-        
+
         sendResponse({success: true});
         return true; // Keep the message channel open
     }
-    
+
+    else if (message.action === 'openAudiencePopup') {
+        if (!sender.tab) {
+            sendResponse({success: false, error: 'No sender tab'});
+            return false;
+        }
+
+        const elementId = message.elementId;
+        const context = {
+            tabId: sender.tab.id,
+            frameId: sender.frameId,
+            variants: message.variants || {},
+            defaultAudience: message.defaultAudience || 'internal',
+            elementId: elementId,
+            windowId: null
+        };
+
+        audienceContexts.set(elementId, context);
+
+        const url = 'audience.html?' + new URLSearchParams({
+            elementId: elementId
+        }).toString();
+
+        chrome.windows.create({
+            url: url,
+            type: 'popup',
+            width: 420,
+            height: 260
+        }, createdWindow => {
+            if (createdWindow?.id !== undefined) {
+                context.windowId = createdWindow.id;
+            }
+        });
+
+        sendResponse({success: true});
+        return true;
+    }
+
     else if (message.action === 'fillVariablesFromPopup') {
         // Forward the message to the original content script
         if (sourceTabId) {
@@ -59,7 +98,69 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true; // Keep the message channel open
         }
     }
-    
+
+    else if (message.action === 'getAudienceData') {
+        const context = audienceContexts.get(message.elementId);
+        if (!context) {
+            sendResponse({success: false, error: 'No audience context found'});
+            return false;
+        }
+        sendResponse({
+            success: true,
+            data: {
+                variants: context.variants,
+                defaultAudience: context.defaultAudience,
+                elementId: context.elementId
+            }
+        });
+        return true;
+    }
+
+    else if (message.action === 'audienceSelection') {
+        const context = audienceContexts.get(message.data?.elementId);
+        if (!context) {
+            sendResponse({success: false, error: 'No audience context found'});
+            return false;
+        }
+
+        const variantKey = message.data.variant;
+        let text = context.variants?.[variantKey];
+        if (!text) {
+            const fallbackKey = variantKey === 'internal' ? 'external' : 'internal';
+            text = context.variants?.[fallbackKey] || '';
+        }
+
+        audienceContexts.delete(context.elementId);
+
+        chrome.tabs.sendMessage(context.tabId, {
+            action: 'audienceSelected',
+            elementId: context.elementId,
+            variant: variantKey,
+            text: text
+        }, {frameId: context.frameId}, response => {
+            console.log('Audience selection forwarded:', response);
+        });
+
+        if (context.windowId !== null) {
+            chrome.windows.remove(context.windowId, () => {});
+        }
+        sendResponse({success: true});
+        return true;
+    }
+
+    else if (message.action === 'audienceCancelled') {
+        const context = audienceContexts.get(message.elementId);
+        if (context) {
+            chrome.tabs.sendMessage(context.tabId, {
+                action: 'audienceCancelled',
+                elementId: context.elementId
+            }, {frameId: context.frameId});
+            audienceContexts.delete(context.elementId);
+        }
+        sendResponse({success: true});
+        return false;
+    }
+
     else if (message.action === 'debugInfo') {
         // Log debug info to background console
         console.log('Field Debug Info:', message.info);
@@ -70,4 +171,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }, {frameId: sender.frameId});
         return true; // Keep the message channel open
     }
-}); 
+});
+
+chrome.windows.onRemoved.addListener((windowId) => {
+    for (const [elementId, context] of audienceContexts.entries()) {
+        if (context.windowId === windowId) {
+            chrome.tabs.sendMessage(context.tabId, {
+                action: 'audienceCancelled',
+                elementId: elementId
+            }, {frameId: context.frameId});
+            audienceContexts.delete(elementId);
+        }
+    }
+});

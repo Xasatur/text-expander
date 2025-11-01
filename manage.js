@@ -2,12 +2,60 @@ let snippets = {};
 let categories = ['Default'];
 let currentCategory = 'Default';
 
+function normalizeSnippetData(data) {
+    if (typeof data === 'string') {
+        return {
+            variants: {
+                internal: data,
+                external: data
+            },
+            category: 'Default',
+            defaultAudience: 'internal'
+        };
+    }
+
+    if (!data) {
+        return {
+            variants: {
+                internal: '',
+                external: ''
+            },
+            category: 'Default',
+            defaultAudience: 'internal'
+        };
+    }
+
+    if (data.variants) {
+        return {
+            variants: {
+                internal: data.variants.internal || data.variants.external || '',
+                external: data.variants.external || data.variants.internal || ''
+            },
+            category: data.category || 'Default',
+            defaultAudience: data.defaultAudience || 'internal'
+        };
+    }
+
+    const phrase = data.phrase || '';
+    return {
+        variants: {
+            internal: phrase,
+            external: phrase
+        },
+        category: data.category || 'Default',
+        defaultAudience: data.defaultAudience || 'internal'
+    };
+}
+
 // Load data when page opens
 document.addEventListener('DOMContentLoaded', loadData);
 
 function loadData() {
     chrome.storage.sync.get(['snippets', 'categories'], function(result) {
-        snippets = result.snippets || {};
+        const rawSnippets = result.snippets || {};
+        snippets = Object.fromEntries(Object.entries(rawSnippets).map(([trigger, data]) => {
+            return [trigger, normalizeSnippetData(data)];
+        }));
         categories = result.categories || ['Default'];
         currentCategory = categories[0];
         
@@ -52,7 +100,7 @@ function renderSnippets(searchTerm = '') {
     
     Object.entries(snippets).forEach(([trigger, data]) => {
         if (data.category !== currentCategory) return;
-        if (searchTerm && !matchesSearch(trigger, data.phrase, searchTerm)) return;
+        if (searchTerm && !matchesSearch(trigger, data, searchTerm)) return;
         
         const card = document.createElement('div');
         card.className = 'snippet-card';
@@ -62,42 +110,87 @@ function renderSnippets(searchTerm = '') {
         triggerInput.value = trigger;
         triggerInput.placeholder = 'Trigger';
         
-        const phraseInput = document.createElement('textarea');
-        phraseInput.value = data.phrase;
-        phraseInput.placeholder = 'Expanded Text';
-        phraseInput.rows = 3;
-        phraseInput.style.width = '100%';
-        phraseInput.style.resize = 'vertical';
+        const internalLabel = document.createElement('label');
+        internalLabel.textContent = 'Intern (du)';
+        internalLabel.style.display = 'block';
+        internalLabel.style.fontSize = '12px';
+        internalLabel.style.marginTop = '8px';
+        
+        const internalInput = document.createElement('textarea');
+        internalInput.value = data.variants.internal || '';
+        internalInput.placeholder = 'Text für Mitarbeitende';
+        internalInput.rows = 3;
+        internalInput.style.width = '100%';
+        internalInput.style.resize = 'vertical';
+        
+        const externalLabel = document.createElement('label');
+        externalLabel.textContent = 'Extern (Sie)';
+        externalLabel.style.display = 'block';
+        externalLabel.style.fontSize = '12px';
+        externalLabel.style.marginTop = '8px';
+        
+        const externalInput = document.createElement('textarea');
+        externalInput.value = data.variants.external || '';
+        externalInput.placeholder = 'Text für Kund:innen';
+        externalInput.rows = 3;
+        externalInput.style.width = '100%';
+        externalInput.style.resize = 'vertical';
+        
+        const defaultSelect = document.createElement('select');
+        defaultSelect.className = 'audience-select';
+        defaultSelect.innerHTML = `
+            <option value="internal">Standard: Intern (du)</option>
+            <option value="external">Standard: Extern (Sie)</option>
+        `;
+        defaultSelect.value = data.defaultAudience === 'external' ? 'external' : 'internal';
         
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-btn';
         deleteBtn.textContent = '×';
         
-        [triggerInput, phraseInput].forEach(input => {
-            input.addEventListener('change', () => updateSnippet(trigger, triggerInput.value, phraseInput.value));
+        [triggerInput, internalInput, externalInput, defaultSelect].forEach(input => {
+            input.addEventListener('change', () => updateSnippet(
+                trigger,
+                triggerInput.value,
+                internalInput.value,
+                externalInput.value,
+                defaultSelect.value
+            ));
         });
         
         deleteBtn.onclick = () => deleteSnippet(trigger);
         
         card.appendChild(triggerInput);
-        card.appendChild(phraseInput);
+        card.appendChild(internalLabel);
+        card.appendChild(internalInput);
+        card.appendChild(externalLabel);
+        card.appendChild(externalInput);
+        card.appendChild(defaultSelect);
         card.appendChild(deleteBtn);
         container.appendChild(card);
     });
 }
 
-function matchesSearch(trigger, phrase, search) {
+function matchesSearch(trigger, data, search) {
     search = search.toLowerCase();
-    return trigger.toLowerCase().includes(search) || 
-           phrase.toLowerCase().includes(search);
+    const content = [
+        trigger,
+        data.variants.internal || '',
+        data.variants.external || ''
+    ].join(' ').toLowerCase();
+    return content.includes(search);
 }
 
-function updateSnippet(oldTrigger, newTrigger, phrase) {
+function updateSnippet(oldTrigger, newTrigger, internalValue, externalValue, defaultAudience) {
     if (oldTrigger !== newTrigger) {
         delete snippets[oldTrigger];
     }
     snippets[newTrigger] = {
-        phrase: phrase,
+        variants: {
+            internal: internalValue || externalValue || '',
+            external: externalValue || internalValue || ''
+        },
+        defaultAudience: defaultAudience === 'external' ? 'external' : 'internal',
         category: currentCategory
     };
     saveData();
@@ -151,7 +244,11 @@ document.getElementById('addSnippet').onclick = () => {
     const trigger = prompt('Enter trigger text:');
     if (trigger) {
         snippets[trigger] = {
-            phrase: '',
+            variants: {
+                internal: '',
+                external: ''
+            },
+            defaultAudience: 'internal',
             category: currentCategory
         };
         saveData();
@@ -186,7 +283,9 @@ document.getElementById('confirmImportExport').onclick = () => {
     try {
         const data = JSON.parse(textarea.value);
         if (data.snippets && data.categories) {
-            snippets = data.snippets;
+            snippets = Object.fromEntries(Object.entries(data.snippets).map(([trigger, value]) => {
+                return [trigger, normalizeSnippetData(value)];
+            }));
             categories = data.categories;
             saveData();
             renderCategories();
