@@ -90,7 +90,8 @@ function normalizeSnippetData(data) {
                 external: data
             },
             category: 'Default',
-            defaultAudience: 'internal'
+            defaultAudience: 'internal',
+            requireChoice: false
         };
     }
 
@@ -101,7 +102,8 @@ function normalizeSnippetData(data) {
                 external: ''
             },
             category: 'Default',
-            defaultAudience: 'internal'
+            defaultAudience: 'internal',
+            requireChoice: false
         };
     }
 
@@ -112,7 +114,8 @@ function normalizeSnippetData(data) {
                 external: data.variants.external || data.variants.internal || ''
             },
             category: data.category || 'Default',
-            defaultAudience: data.defaultAudience || 'internal'
+            defaultAudience: data.defaultAudience || 'internal',
+            requireChoice: Boolean(data.requireChoice)
         };
     }
 
@@ -123,7 +126,8 @@ function normalizeSnippetData(data) {
             external: phrase
         },
         category: data.category || 'Default',
-        defaultAudience: data.defaultAudience || 'internal'
+        defaultAudience: data.defaultAudience || 'internal',
+        requireChoice: Boolean(data.requireChoice)
     };
 }
 
@@ -226,18 +230,29 @@ function renderSnippets(searchTerm = '') {
             <option value="external">Standard: Extern (Sie)</option>
         `;
         defaultSelect.value = data.defaultAudience === 'external' ? 'external' : 'internal';
-        
+
+        const choiceLabel = document.createElement('label');
+        choiceLabel.className = 'audience-toggle';
+        const choiceCheckbox = document.createElement('input');
+        choiceCheckbox.type = 'checkbox';
+        choiceCheckbox.checked = Boolean(data.requireChoice);
+        const choiceText = document.createElement('span');
+        choiceText.textContent = 'Beim Einfügen Variante auswählen';
+        choiceLabel.appendChild(choiceCheckbox);
+        choiceLabel.appendChild(choiceText);
+
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-btn';
         deleteBtn.textContent = '×';
         
-        [triggerInput, internalInput, externalInput, defaultSelect].forEach(input => {
+        [triggerInput, internalInput, externalInput, defaultSelect, choiceCheckbox].forEach(input => {
             input.addEventListener('change', () => updateSnippet(
                 trigger,
                 triggerInput.value,
                 internalInput.value,
                 externalInput.value,
-                defaultSelect.value
+                defaultSelect.value,
+                choiceCheckbox.checked
             ));
         });
         
@@ -249,6 +264,7 @@ function renderSnippets(searchTerm = '') {
         card.appendChild(externalLabel);
         card.appendChild(externalInput);
         card.appendChild(defaultSelect);
+        card.appendChild(choiceLabel);
         card.appendChild(deleteBtn);
         container.appendChild(card);
     });
@@ -264,7 +280,7 @@ function matchesSearch(trigger, data, search) {
     return content.includes(search);
 }
 
-function updateSnippet(oldTrigger, newTrigger, internalValue, externalValue, defaultAudience) {
+function updateSnippet(oldTrigger, newTrigger, internalValue, externalValue, defaultAudience, requireChoice) {
     if (oldTrigger !== newTrigger) {
         delete snippets[oldTrigger];
     }
@@ -274,6 +290,7 @@ function updateSnippet(oldTrigger, newTrigger, internalValue, externalValue, def
             external: externalValue || internalValue || ''
         },
         defaultAudience: defaultAudience === 'external' ? 'external' : 'internal',
+        requireChoice: Boolean(requireChoice),
         category: currentCategory
     };
     saveData();
@@ -335,6 +352,7 @@ document.getElementById('addSnippet').onclick = () => {
                 internal: '',
                 external: ''
             },
+            requireChoice: false,
             defaultAudience: 'internal',
             category: currentCategory
         };

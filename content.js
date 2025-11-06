@@ -47,7 +47,8 @@ function normalizeSnippetData(data) {
                 external: data
             },
             category: 'Default',
-            defaultAudience: 'internal'
+            defaultAudience: 'internal',
+            requireChoice: false
         };
     }
 
@@ -58,7 +59,8 @@ function normalizeSnippetData(data) {
                 external: ''
             },
             category: 'Default',
-            defaultAudience: 'internal'
+            defaultAudience: 'internal',
+            requireChoice: false
         };
     }
 
@@ -69,7 +71,8 @@ function normalizeSnippetData(data) {
                 external: data.variants.external || data.variants.internal || ''
             },
             category: data.category || 'Default',
-            defaultAudience: data.defaultAudience || 'internal'
+            defaultAudience: data.defaultAudience || 'internal',
+            requireChoice: Boolean(data.requireChoice)
         };
     }
 
@@ -80,7 +83,8 @@ function normalizeSnippetData(data) {
             external: phrase
         },
         category: data.category || 'Default',
-        defaultAudience: data.defaultAudience || 'internal'
+        defaultAudience: data.defaultAudience || 'internal',
+        requireChoice: Boolean(data.requireChoice)
     };
 }
 
@@ -516,27 +520,39 @@ function replaceTrigger(el) {
                 return;
             }
 
+            const variants = snippetData.variants || {};
+            const defaultKey = snippetData.defaultAudience === 'external' ? 'external' : 'internal';
+            const alternateKey = defaultKey === 'external' ? 'internal' : 'external';
+            const defaultText = variants[defaultKey] || variants[alternateKey] || '';
+            const alternateText = variants[alternateKey] || '';
+            const requiresChoice = Boolean(snippetData.requireChoice) && alternateText && alternateText !== defaultText;
+
             const elementId = 'expander_' + Math.random().toString(36).substr(2, 9);
             el.dataset.expanderId = elementId;
+
+            if (!requiresChoice) {
+                finalizeAudienceSelection(elementId, defaultText);
+                return;
+            }
+
             el.dataset.expanderAudiencePending = 'true';
 
             PENDING_AUDIENCE[elementId] = {
                 trigger: trigger,
-                variants: snippetData.variants,
+                variants: variants,
                 defaultAudience: snippetData.defaultAudience || 'internal'
             };
 
             safeSendMessage({
                 action: 'openAudiencePopup',
                 elementId: elementId,
-                variants: snippetData.variants,
+                variants: variants,
                 defaultAudience: snippetData.defaultAudience || 'internal'
             }, () => {
                 // audience popup opened successfully
             }, (error) => {
                 console.log('Audience popup failed, falling back to default audience:', error);
-                const fallbackVariant = snippetData.defaultAudience === 'external' ? snippetData.variants.external : snippetData.variants.internal;
-                finalizeAudienceSelection(elementId, fallbackVariant || snippetData.variants.internal || snippetData.variants.external || '');
+                finalizeAudienceSelection(elementId, defaultText);
             });
             return;
         }

@@ -105,7 +105,8 @@ function normalizeSnippetData(data) {
                 external: data
             },
             category: 'Default',
-            defaultAudience: 'internal'
+            defaultAudience: 'internal',
+            requireChoice: false
         };
     }
 
@@ -116,7 +117,8 @@ function normalizeSnippetData(data) {
                 external: ''
             },
             category: 'Default',
-            defaultAudience: 'internal'
+            defaultAudience: 'internal',
+            requireChoice: false
         };
     }
 
@@ -127,7 +129,8 @@ function normalizeSnippetData(data) {
                 external: data.variants.external || data.variants.internal || ''
             },
             category: data.category || 'Default',
-            defaultAudience: data.defaultAudience || 'internal'
+            defaultAudience: data.defaultAudience || 'internal',
+            requireChoice: Boolean(data.requireChoice)
         };
     }
 
@@ -138,7 +141,8 @@ function normalizeSnippetData(data) {
             external: phrase
         },
         category: data.category || 'Default',
-        defaultAudience: data.defaultAudience || 'internal'
+        defaultAudience: data.defaultAudience || 'internal',
+        requireChoice: Boolean(data.requireChoice)
     };
 }
 
@@ -154,13 +158,14 @@ function loadSnippets() {
                 trigger,
                 normalized.variants.internal,
                 normalized.variants.external,
-                normalized.defaultAudience
+                normalized.defaultAudience,
+                normalized.requireChoice
             );
         });
     });
 }
 
-function addSnippetToUI(trigger = '', internalPhrase = '', externalPhrase = '', defaultAudience = 'internal') {
+function addSnippetToUI(trigger = '', internalPhrase = '', externalPhrase = '', defaultAudience = 'internal', requireChoice = false) {
     const container = document.getElementById('snippetList');
     const snippetDiv = document.createElement('div');
     snippetDiv.className = 'snippet-item';
@@ -209,6 +214,17 @@ function addSnippetToUI(trigger = '', internalPhrase = '', externalPhrase = '', 
         <option value="external">Standard: Extern (Sie)</option>
     `;
     audienceSelect.value = defaultAudience === 'external' ? 'external' : 'internal';
+
+    const choiceLabel = document.createElement('label');
+    choiceLabel.className = 'audience-toggle';
+    const choiceCheckbox = document.createElement('input');
+    choiceCheckbox.type = 'checkbox';
+    choiceCheckbox.className = 'require-choice';
+    choiceCheckbox.checked = Boolean(requireChoice);
+    const choiceText = document.createElement('span');
+    choiceText.textContent = 'Beim Einfügen Variante auswählen';
+    choiceLabel.appendChild(choiceCheckbox);
+    choiceLabel.appendChild(choiceText);
     
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'delete-btn';
@@ -220,12 +236,13 @@ function addSnippetToUI(trigger = '', internalPhrase = '', externalPhrase = '', 
     contentDiv.appendChild(externalLabel);
     contentDiv.appendChild(externalInput);
     contentDiv.appendChild(audienceSelect);
+    contentDiv.appendChild(choiceLabel);
     snippetDiv.appendChild(contentDiv);
     snippetDiv.appendChild(deleteBtn);
     container.appendChild(snippetDiv);
     
     // Save when inputs change
-    [triggerInput, internalInput, externalInput, audienceSelect].forEach(input => {
+    [triggerInput, internalInput, externalInput, audienceSelect, choiceCheckbox].forEach(input => {
         input.addEventListener('change', saveSnippets);
         input.addEventListener('input', saveSnippets);
     });
@@ -244,6 +261,7 @@ function saveSnippets() {
         const internalPhrase = item.querySelector('.phrase-internal').value.trim();
         const externalPhrase = item.querySelector('.phrase-external').value.trim();
         const defaultAudience = item.querySelector('.audience-select').value;
+        const requireChoice = item.querySelector('.require-choice').checked;
         if (trigger && (internalPhrase || externalPhrase)) {
             snippets[trigger] = {
                 variants: {
@@ -251,6 +269,7 @@ function saveSnippets() {
                     external: externalPhrase || internalPhrase
                 },
                 defaultAudience: defaultAudience,
+                requireChoice: requireChoice,
                 category: 'Default'
             };
         }
