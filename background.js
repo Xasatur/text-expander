@@ -72,8 +72,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.windows.create({
             url: url,
             type: 'popup',
-            width: 420,
-            height: 260
+            width: 540,
+            height: 420
         }, createdWindow => {
             if (createdWindow?.id !== undefined) {
                 context.windowId = createdWindow.id;
