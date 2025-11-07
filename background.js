@@ -34,13 +34,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             text: message.text,
             elementId: message.elementId
         }).toString();
-
+        
         // Open popup window
         chrome.windows.create({
             url: url,
             type: 'popup',
-            width: 400,
-            height: 300
+            width: 560,
+            height: 420
         });
 
         sendResponse({success: true});
@@ -72,8 +72,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.windows.create({
             url: url,
             type: 'popup',
-            width: 540,
-            height: 420
+            width: 640,
+            height: 520
         }, createdWindow => {
             if (createdWindow?.id !== undefined) {
                 context.windowId = createdWindow.id;
